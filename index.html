@@ -6,58 +6,110 @@
   <title>Boetepot • Invoer</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f1115" />
-  <style>
-    :root { color-scheme: dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background:#0f1115; color:#fff; }
-    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
-    h1 { font-size: 20px; font-weight: 700; margin: 12px 4px 16px; }
-    .card { background: rgba(255,255,255,0.06); backdrop-filter: blur(12px); border-radius: 16px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
-    label { display:block; font-size:14px; opacity:.85; margin-bottom:6px; }
-    input, select, textarea, button {
-      width: 90%; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.05); color:#fff; font-size:16px; outline: none;
-    }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
-    .spacer { height: 12px; }
-    button { cursor: pointer; border: none; font-weight: 600; }
-    .btn { background: #4f8cff; }
-    .muted { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
-    .ok { color:#8cf5a6; }
-    .err { color:#ff9a9a; }
-    .queue { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
-    .pill { display:inline-block; background:rgba(255,255,255,.08); padding:4px 8px; border-radius:999px; font-size:12px; margin-right:6px; }
-  </style>
+<style>
+  :root { color-scheme: dark; }
+
+  /* ✨ Belangrijk: voorkomt ‘uit de container vallen’ */
+  *, *::before, *::after { box-sizing: border-box; min-width: 0; }
+
+  html, body { margin: 0; padding: 0; overflow-x: hidden; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background:#0f1115; color:#fff;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: clamp(12px,2vw,24px); }
+  h1 { font-size: 20px; font-weight: 700; margin: 12px 4px 16px; }
+
+  .card {
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    overflow: hidden; /* voorkomt dat inhoud ‘over de rand’ gaat */
+  }
+
+  form { width: 100%; }
+
+  /* ✅ Responsieve rijen: nooit te smal, wrappen automatisch */
+  .row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    width: 100%;
+  }
+
+  .field { min-width: 0; } /* voorkomt knellen in grid-cellen */
+
+  label { display:block; font-size:14px; opacity:.85; margin-bottom:6px; }
+
+  input, select, textarea, button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color:#fff;
+    font-size: 16px; /* iOS zoom fix + betere leesbaarheid */
+    outline: none;
+  }
+
+  /* iOS/Safari date input kan breed uitvallen; dit helpt */
+  input[type="date"] { appearance: none; -webkit-appearance: none; }
+
+  textarea { resize: vertical; max-width: 100%; }
+
+  .spacer { height: 12px; }
+
+  button { cursor: pointer; border: none; font-weight: 600; }
+  .btn { background: #4f8cff; }
+
+  .muted { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
+  .ok { color:#8cf5a6; }
+  .err { color:#ff9a9a; }
+  .queue { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
+
+  .pill { display:inline-block; background:rgba(255,255,255,.08); padding:4px 8px; border-radius:999px; font-size:12px; margin-right:6px; }
+</style>
 </head>
 <body>
   <div class="wrap">
     <h1>Boete invoer</h1>
     <div class="card">
       <form id="boeteForm" autocomplete="off">
-        <div class="row">
-          <div>
-            <label>Datum</label>
-            <input type="date" name="datum" required />
-          </div>
-          <div>
-            <label>Speler</label>
-            <select name="speler" id="spelerSelect" required></select>
-          </div>
-        </div>
-        <div class="spacer"></div>
-        <div class="row">
-          <div>
-            <label>Boetecode</label>
-            <select name="boetecode" id="boeteSelect" required></select>
-          </div>
-          <div>
-            <label>Ingevoerd door</label>
-            <input name="ingevoerdDoor" placeholder="Trainer/leider" required />
-          </div>
-        </div>
-        <div class="spacer"></div>
-        <label>Opmerking</label>
-        <textarea name="opmerking" rows="3" placeholder="Optioneel"></textarea>
+<div class="row">
+  <div class="field">
+    <label>Datum</label>
+    <input type="date" name="datum" required />
+  </div>
+  <div class="field">
+    <label>Speler</label>
+    <select name="speler" id="spelerSelect" required></select>
+  </div>
+</div>
+
+<div class="spacer"></div>
+
+<div class="row">
+  <div class="field">
+    <label>Boetecode</label>
+    <select name="boetecode" id="boeteSelect" required></select>
+  </div>
+  <div class="field">
+    <label>Ingevoerd door</label>
+    <input name="ingevoerdDoor" placeholder="Trainer/leider" required />
+  </div>
+</div>
+
+<div class="spacer"></div>
+
+<div class="field">
+  <label>Opmerking</label>
+  <textarea name="opmerking" rows="3" placeholder="Optioneel"></textarea>
+</div>
+
         <div class="spacer"></div>
         <button class="btn" type="submit">Toevoegen</button>
         <div id="status" class="muted"></div>
