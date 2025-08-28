@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Boetepot • Invoer</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f1115" />
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background:#0f1115; color:#fff; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; font-weight: 700; margin: 12px 4px 16px; }
+    .card { background: rgba(255,255,255,0.06); backdrop-filter: blur(12px); border-radius: 16px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+    label { display:block; font-size:14px; opacity:.85; margin-bottom:6px; }
+    input, select, textarea, button {
+      width: 100%; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05); color:#fff; font-size:16px; outline: none;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+    .spacer { height: 12px; }
+    button { cursor: pointer; border: none; font-weight: 600; }
+    .btn { background: #4f8cff; }
+    .muted { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
+    .ok { color:#8cf5a6; }
+    .err { color:#ff9a9a; }
+    .queue { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
+    .pill { display:inline-block; background:rgba(255,255,255,.08); padding:4px 8px; border-radius:999px; font-size:12px; margin-right:6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Boete invoer</h1>
+    <div class="card">
+      <form id="boeteForm" autocomplete="off">
+        <div class="row">
+          <div>
+            <label>Datum</label>
+            <input type="date" name="datum" required />
+          </div>
+          <div>
+            <label>Speler</label>
+            <select name="speler" id="spelerSelect" required></select>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <div>
+            <label>Boetecode</label>
+            <select name="boetecode" id="boeteSelect" required></select>
+          </div>
+          <div>
+            <label>Ingevoerd door</label>
+            <input name="ingevoerdDoor" placeholder="Trainer/leider" required />
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <label>Opmerking</label>
+        <textarea name="opmerking" rows="3" placeholder="Optioneel"></textarea>
+        <div class="spacer"></div>
+        <button class="btn" type="submit">Toevoegen</button>
+        <div id="status" class="muted"></div>
+        <div id="queue" class="queue"></div>
+        <div class="muted">
+          <span class="pill" id="onlinePill">• Offline</span>
+          <span class="pill">PWA</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    // --- CONFIG ---
+    const ENDPOINT = "https://workers-playground-old-night-9045.dxtg96.workers.dev/"; // <-- vul in
+    const SHARED_SECRET = "9f5a2d7c4b1e8a33c6d0f2a9b7e4c1d2"; // <-- optioneel: zet hier jouw secret en stel deze in Script Properties als SHARED_SECRET
+
+    // --- UI refs ---
+    const form = document.getElementById('boeteForm');
+    const statusEl = document.getElementById('status');
+    const queueEl = document.getElementById('queue');
+    const spelerSelect = document.getElementById('spelerSelect');
+    const boeteSelect = document.getElementById('boeteSelect');
+    const onlinePill = document.getElementById('onlinePill');
+
+    // --- helpers ---
+    const loadQueue = () => JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+    const saveQueue = (q) => localStorage.setItem('offlineQueue', JSON.stringify(q));
+
+    function setOnlineState() {
+      const online = navigator.onLine;
+      onlinePill.textContent = online ? "• Online" : "• Offline";
+      onlinePill.style.background = online ? "rgba(140,245,166,.15)" : "rgba(255,154,154,.12)";
+    }
+    setOnlineState();
+    window.addEventListener('online', () => { setOnlineState(); flushQueue(); });
+    window.addEventListener('offline', setOnlineState);
+
+    // --- fetch config for dropdowns ---
+    async function loadConfig() {
+      try {
+        const res = await fetch(ENDPOINT + "?cfg=1&secret=" + encodeURIComponent(SHARED_SECRET));
+        const data = await res.json();
+        if (Array.isArray(data.spelers)) {
+          spelerSelect.innerHTML = '<option value="" disabled selected>Kies speler…</option>' +
+            data.spelers.map(n => `<option value="${n}">${n}</option>`).join("");
+        }
+        if (Array.isArray(data.boetes)) {
+          boeteSelect.innerHTML = '<option value="" disabled selected>Kies boetecode…</option>' +
+            data.boetes.map(b => `<option value="${b.code}">${b.code} — ${b.overtreding||""}</option>`).join("");
+        }
+      } catch (e) {
+        // Stil falen (offline) — velden blijven leeg tot online
+      }
+    }
+
+    // --- flush offline queue ---
+    async function flushQueue() {
+      let q = loadQueue();
+      if (!q.length) { queueEl.textContent = ""; return; }
+      queueEl.textContent = `⏳ Offline wachtrij: ${q.length} item(s)`;
+      const remain = [];
+      for (const item of q) {
+        try {
+          const res = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item)
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || 'Error from server');
+        } catch (e) { remain.push(item); }
+      }
+      saveQueue(remain);
+      queueEl.textContent = remain.length ? `⏳ Wachtrij: ${remain.length} item(s)` : "✔️ Alle offline items verstuurd";
+    }
+
+    // --- submit ---
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = {
+        datum: fd.get('datum'),
+        speler: fd.get('speler'),
+        boetecode: fd.get('boetecode'),
+        ingevoerdDoor: fd.get('ingevoerdDoor'),
+        opmerking: fd.get('opmerking'),
+        secret: SHARED_SECRET || undefined
+      };
+      statusEl.textContent = "Versturen…";
+
+      async function send() {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        return res.json();
+      }
+
+      try {
+        const data = await send();
+        if (data.ok) {
+          statusEl.innerHTML = '<span class="ok">✔️ Toegevoegd</span>';
+          form.reset();
+          // select placeholders opnieuw
+          spelerSelect.selectedIndex = 0;
+          boeteSelect.selectedIndex = 0;
+        } else {
+          throw new Error(data.error || 'Onbekende fout');
+        }
+      } catch (err) {
+        // Offline of fout → in wachtrij
+        const q = loadQueue();
+        q.push(payload);
+        saveQueue(q);
+        statusEl.innerHTML = '<span class="err">Offline of fout — in wachtrij geplaatst</span>';
+        queueEl.textContent = `⏳ Wachtrij: ${q.length} item(s)`;
+      }
+    });
+
+    // Service worker voor PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+
+    // Init
+    loadConfig();
+    flushQueue();
+  </script>
+</body>
+</html>
