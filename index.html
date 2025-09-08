@@ -8,83 +8,49 @@
   <meta name="theme-color" content="#0f1115" />
 <style>
   :root { color-scheme: dark; }
-
-  /* ✨ Belangrijk: voorkomt ‘uit de container vallen’ */
   *, *::before, *::after { box-sizing: border-box; min-width: 0; }
-
   html, body { margin: 0; padding: 0; overflow-x: hidden; }
   body {
     font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     background:#0f1115; color:#fff;
     -webkit-text-size-adjust: 100%;
   }
-
   .wrap { max-width: 720px; margin: 0 auto; padding: clamp(12px,2vw,24px); }
   h1 { font-size: 20px; font-weight: 700; margin: 12px 4px 16px; }
-
   .card {
     background: rgba(255,255,255,0.06);
     backdrop-filter: blur(12px);
     border-radius: 16px;
     padding: 16px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-    overflow: hidden; /* voorkomt dat inhoud ‘over de rand’ gaat */
+    overflow: hidden;
   }
-
   form { width: 100%; }
-
-  /* ✅ Responsieve rijen: nooit te smal, wrappen automatisch */
   .row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
     width: 100%;
   }
-
-  .field { min-width: 0; } /* voorkomt knellen in grid-cellen */
-
+  .field { min-width: 0; }
   label { display:block; font-size:14px; opacity:.85; margin-bottom:6px; }
-
   input, select, textarea, button {
-    width: 100%;
-    padding: 12px;
-    border-radius: 12px;
+    width: 100%; padding: 12px; border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.15);
     background: rgba(255,255,255,0.05);
-    color:#fff;
-    font-size: 16px; /* iOS zoom fix + betere leesbaarheid */
-    outline: none;
+    color:#fff; font-size: 16px; outline: none;
   }
-
-  select {
-  background-color: #222;  /* donkere achtergrond */
-  color: #fff;             /* lichte tekst */
-  border: 1px solid #555;
-  border-radius: 6px;
-  padding: 6px;
-}
-
-/* stijl voor de opties in de dropdown */
-select option {
-  background-color: #222;  /* dropdown-achtergrond */
-  color: #fff;             /* tekstkleur */
-}
-
-  /* iOS/Safari date input kan breed uitvallen; dit helpt */
+  select { background-color: #222; color: #fff; border: 1px solid #555; border-radius: 6px; padding: 6px; }
+  select option { background-color: #222; color: #fff; }
   input[type="date"] { appearance: none; -webkit-appearance: none; }
-
   textarea { resize: vertical; max-width: 100%; }
-
   .spacer { height: 12px; }
-
   button { cursor: pointer; border: none; font-weight: 600; }
   .btn { background: #4f8cff; }
-
   .muted { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
   .ok { color:#8cf5a6; }
   .err { color:#ff9a9a; }
   .queue { font-size: 12px; opacity:.8; margin-top:8px; min-height: 16px; }
-
   .pill { display:inline-block; background:rgba(255,255,255,.08); padding:4px 8px; border-radius:999px; font-size:12px; margin-right:6px; }
 </style>
 </head>
@@ -93,6 +59,7 @@ select option {
     <h1>Boete invoer</h1>
     <div class="card">
       <form id="boeteForm" autocomplete="off">
+
 <div class="row">
   <div class="field">
     <label>Datum</label>
@@ -111,6 +78,13 @@ select option {
     <label>Boetecode</label>
     <select name="boetecode" id="boeteSelect" required></select>
   </div>
+
+  <div class="field">
+    <label>Aantal</label>
+    <input type="number" id="aantal" name="aantal" min="1" step="1" value="1" required />
+    <div id="aantalHint" class="muted"></div>
+  </div>
+
   <div class="field">
     <label>Ingevoerd door</label>
     <input name="ingevoerdDoor" placeholder="Trainer/leider" required />
@@ -136,142 +110,161 @@ select option {
     </div>
   </div>
 
-  <script type="module">
-    // --- CONFIG ---
-    const ENDPOINT = "https://workers-playground-old-night-9045.dxtg96.workers.dev/"; // <-- vul in
-    const SHARED_SECRET = "9f5a2d7c4b1e8a33c6d0f2a9b7e4c1d2"; // <-- optioneel: zet hier jouw secret en stel deze in Script Properties als SHARED_SECRET
+<script type="module">
+  // --- CONFIG ---
+  const ENDPOINT = "https://workers-playground-old-night-9045.dxtg96.workers.dev/"; // <-- jouw endpoint
+  const SHARED_SECRET = "9f5a2d7c4b1e8a33c6d0f2a9b7e4c1d2"; // <-- idem als Script Properties
 
-    // --- UI refs ---
-    const form = document.getElementById('boeteForm');
-    const statusEl = document.getElementById('status');
-    const queueEl = document.getElementById('queue');
-    const spelerSelect = document.getElementById('spelerSelect');
-    const boeteSelect = document.getElementById('boeteSelect');
-    const onlinePill = document.getElementById('onlinePill');
+  // --- UI refs ---
+  const form = document.getElementById('boeteForm');
+  const statusEl = document.getElementById('status');
+  const queueEl = document.getElementById('queue');
+  const spelerSelect = document.getElementById('spelerSelect');
+  const boeteSelect = document.getElementById('boeteSelect');
+  const onlinePill = document.getElementById('onlinePill');
+  const aantalInput = document.getElementById('aantal');
+  const aantalHint  = document.getElementById('aantalHint');
 
-    // --- helpers ---
-    const loadQueue = () => JSON.parse(localStorage.getItem('offlineQueue') || '[]');
-    const saveQueue = (q) => localStorage.setItem('offlineQueue', JSON.stringify(q));
+  // --- state ---
+  let BOETE_CONFIG = [];
 
-    function setOnlineState() {
-      const online = navigator.onLine;
-      onlinePill.textContent = online ? "• Online" : "• Offline";
-      onlinePill.style.background = online ? "rgba(140,245,166,.15)" : "rgba(255,154,154,.12)";
+  // --- helpers ---
+  const loadQueue = () => JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+  const saveQueue = (q) => localStorage.setItem('offlineQueue', JSON.stringify(q));
+
+  function setOnlineState() {
+    const online = navigator.onLine;
+    onlinePill.textContent = online ? "• Online" : "• Offline";
+    onlinePill.style.background = online ? "rgba(140,245,166,.15)" : "rgba(255,154,154,.12)";
+  }
+  setOnlineState();
+  window.addEventListener('online', () => { setOnlineState(); flushQueue(); });
+  window.addEventListener('offline', setOnlineState);
+
+  // Config voor dropdowns
+  async function loadConfig() {
+    try {
+      const res = await fetch(ENDPOINT + "?cfg=1&secret=" + encodeURIComponent(SHARED_SECRET));
+      const data = await res.json();
+      if (Array.isArray(data.spelers)) {
+        spelerSelect.innerHTML = '<option value="" disabled selected>Kies speler…</option>' +
+          data.spelers.map(n => `<option value="${n}">${n}</option>`).join("");
+      }
+      if (Array.isArray(data.boetes)) {
+        BOETE_CONFIG = data.boetes;
+        boeteSelect.innerHTML = '<option value="" disabled selected>Kies boetecode…</option>' +
+          data.boetes.map(b => {
+            const label = [b.code, (b.overtreding||"")].filter(Boolean).join(" — ");
+            return `<option value="${b.code}">${label}</option>`;
+          }).join("");
+      }
+    } catch {}
+  }
+
+  // Preview hint voor aantal/totaal
+  function updateAantalHint() {
+    const code = boeteSelect.value;
+    const cfg = BOETE_CONFIG.find(b => b.code === code);
+    const qty = Math.max(1, Number(aantalInput?.value || 1));
+    if (!cfg) { if (aantalHint) aantalHint.textContent = ""; return; }
+
+    const base = Number(cfg.bedrag || 0);
+    const typ  = cfg.type || "vast";
+    const eenh = cfg.eenheid || "";
+
+    if (typ === "per_stuk") {
+      const total = base * qty;
+      aantalHint.textContent = `€${base.toFixed(2)} per ${eenh || "stuk"} × ${qty} = €${total.toFixed(2)}`;
+    } else {
+      aantalHint.textContent = `Vast bedrag: €${base.toFixed(2)} (Aantal wordt genegeerd)`;
     }
-    setOnlineState();
-    window.addEventListener('online', () => { setOnlineState(); flushQueue(); });
-    window.addEventListener('offline', setOnlineState);
+  }
+  boeteSelect.addEventListener('change', updateAantalHint);
+  aantalInput.addEventListener('input', updateAantalHint);
 
-    // --- fetch config for dropdowns ---
-    async function loadConfig() {
+  // Offline queue flush
+  async function flushQueue() {
+    let q = loadQueue();
+    if (!q.length) { queueEl.textContent = ""; return; }
+    queueEl.textContent = `⏳ Offline wachtrij: ${q.length} item(s)`;
+    const remain = [];
+    for (const item of q) {
       try {
-        const res = await fetch(ENDPOINT + "?cfg=1&secret=" + encodeURIComponent(SHARED_SECRET));
-        const data = await res.json();
-        if (Array.isArray(data.spelers)) {
-          spelerSelect.innerHTML = '<option value="" disabled selected>Kies speler…</option>' +
-            data.spelers.map(n => `<option value="${n}">${n}</option>`).join("");
-        }
-        if (Array.isArray(data.boetes)) {
-          boeteSelect.innerHTML = '<option value="" disabled selected>Kies boetecode…</option>' +
-            data.boetes.map(b => `<option value="${b.code}">${b.code} — ${b.overtreding||""}</option>`).join("");
-        }
-      } catch (e) {
-        // Stil falen (offline) — velden blijven leeg tot online
-      }
-    }
-
-    // --- flush offline queue ---
-    async function flushQueue() {
-      let q = loadQueue();
-      if (!q.length) { queueEl.textContent = ""; return; }
-      queueEl.textContent = `⏳ Offline wachtrij: ${q.length} item(s)`;
-      const remain = [];
-      for (const item of q) {
-        try {
-          const res = await fetch(ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(item)
-          });
-          const data = await res.json();
-          if (!data.ok) throw new Error(data.error || 'Error from server');
-        } catch (e) { remain.push(item); }
-      }
-      saveQueue(remain);
-      queueEl.textContent = remain.length ? `⏳ Wachtrij: ${remain.length} item(s)` : "✔️ Alle offline items verstuurd";
-    }
-
-    // --- submit ---
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fd = new FormData(form);
-      const payload = {
-        datum: fd.get('datum'),
-        speler: fd.get('speler'),
-        boetecode: fd.get('boetecode'),
-        ingevoerdDoor: fd.get('ingevoerdDoor'),
-        opmerking: fd.get('opmerking'),
-        secret: SHARED_SECRET || undefined
-      };
-      statusEl.textContent = "Versturen…";
-
-      async function send() {
         const res = await fetch(ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(item)
         });
-        return res.json();
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Error from server');
+      } catch { remain.push(item); }
+    }
+    saveQueue(remain);
+    queueEl.textContent = remain.length ? `⏳ Wachtrij: ${remain.length} item(s)` : "✔️ Alle offline items verstuurd";
+  }
+
+  // Submit
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const payload = {
+      datum: fd.get('datum'),
+      speler: fd.get('speler'),
+      boetecode: fd.get('boetecode'),
+      ingevoerdDoor: fd.get('ingevoerdDoor'),
+      opmerking: fd.get('opmerking'),
+      aantal: Number(fd.get('aantal') || 1),  // <-- essentieel
+      secret: SHARED_SECRET || undefined
+    };
+    statusEl.textContent = "Versturen…";
+
+    async function send() {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.json();
+    }
+
+    try {
+      const data = await send();
+      if (data.ok) {
+        statusEl.innerHTML = '<span class="ok">✔️ Toegevoegd</span>';
+        form.reset();
+        spelerSelect.selectedIndex = 0;
+        boeteSelect.selectedIndex = 0;
+        if (aantalInput) aantalInput.value = 1;
+        if (aantalHint)  aantalHint.textContent = "";
+      } else {
+        throw new Error(data.error || 'Onbekende fout');
       }
+    } catch (err) {
+      // Offline/fout => in wachtrij
+      const q = loadQueue();
+      q.push(payload);
+      saveQueue(q);
+      statusEl.innerHTML = '<span class="err">Offline of fout — in wachtrij geplaatst</span>';
+      queueEl.textContent = `⏳ Wachtrij: ${q.length} item(s)`;
+    }
+  });
 
-      try {
-        const data = await send();
-        if (data.ok) {
-          statusEl.innerHTML = '<span class="ok">✔️ Toegevoegd</span>';
-          form.reset();
-          // select placeholders opnieuw
-          spelerSelect.selectedIndex = 0;
-          boeteSelect.selectedIndex = 0;
-        } else {
-          throw new Error(data.error || 'Onbekende fout');
-        }
-      } catch (err) {
-        // Offline of fout → in wachtrij
-        const q = loadQueue();
-        q.push(payload);
-        saveQueue(q);
-        statusEl.innerHTML = '<span class="err">Offline of fout — in wachtrij geplaatst</span>';
-        queueEl.textContent = `⏳ Wachtrij: ${q.length} item(s)`;
-      }
-    });
+  // Default datum = vandaag
+  document.addEventListener('DOMContentLoaded', () => {
+    const datumInput = document.getElementById('datum');
+    const now = new Date();
+    const formatDate = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+    datumInput.value = formatDate(now);
+  });
 
-        document.addEventListener('DOMContentLoaded', (event) => {
-        // Functie om de datum te formatteren
-        function formatDate(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-
-        // Haal de invoervelden op
-        const datumInput = document.getElementById('datum');
-
-        // Maak een nieuw Date-object
-        const now = new Date();
-
-        // Vul de invoervelden met de geformatteerde datum en tijd
-        datumInput.value = formatDate(now);
-    });
-
-    // Service worker voor PWA
-    //if ('serviceWorker' in navigator) {
-    //  navigator.serviceWorker.register('./sw.js');
-    //}
-
-    // Init
-    loadConfig();
-    flushQueue();
-  </script>
+  // Init
+  loadConfig();
+  flushQueue();
+</script>
 </body>
 </html>
