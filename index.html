@@ -100,6 +100,7 @@
 
         <div class="spacer"></div>
         <button class="btn" type="submit">Toevoegen</button>
+        <button type="button" id="clearBtn">Leegmaken</button>
         <div id="status" class="muted"></div>
         <div id="queue" class="queue"></div>
         <div class="muted">
@@ -124,6 +125,17 @@
   const onlinePill = document.getElementById('onlinePill');
   const aantalInput = document.getElementById('aantal');
   const aantalHint  = document.getElementById('aantalHint');
+
+  const clearBtn = document.getElementById('clearBtn');
+
+clearBtn.addEventListener('click', () => {
+  form.reset();
+  spelerSelect.selectedIndex = 0;
+  boeteSelect.selectedIndex = 0;
+  if (aantalInput) aantalInput.value = 1;
+  if (aantalHint)  aantalHint.textContent = "";
+  statusEl.textContent = "";
+});
 
   // --- state ---
   let BOETE_CONFIG = [];
